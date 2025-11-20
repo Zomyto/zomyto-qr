@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Zomyto – Approve Stablecoins (WC v2 simpel)</title>
+  <title>Zomyto – Approve Stablecoins (WC v2 via jsDelivr)</title>
 
-  <!-- Ethers v5 -->
+  <!-- Ethers v5 via jsDelivr -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
-  <!-- WalletConnect v2 Ethereum Provider UMD -->
-  <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.11.2/dist/umd/index.min.js"></script>
+  <!-- WalletConnect v2 Ethereum Provider UMD via jsDelivr -->
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.11.2/dist/umd/index.min.js"></script>
 
   <style>
     body {
@@ -93,12 +93,17 @@
       try {
         setStatus("WalletConnect initialiseren...");
 
+        if (!window.WalletConnectEthereumProvider) {
+          setStatus("WalletConnectEthereumProvider is niet beschikbaar (script geblokkeerd?).");
+          alert("WalletConnectEthereumProvider is niet beschikbaar. Controleer of cdn.jsdelivr.net niet geblokkeerd wordt (adblocker / netwerk).");
+          return;
+        }
+
         // Maak een WC v2 provider
         wcProvider = await window.WalletConnectEthereumProvider.init({
           projectId,
           showQrModal: true,
           chains: [CHAIN_ID],
-          // optioneel: RPC override
           rpcMap: {
             [CHAIN_ID]: "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2"
           }
@@ -122,7 +127,7 @@
 
         approveBtn.disabled = false;
 
-        // Event handlers (optioneel)
+        // Events
         wcProvider.on("accountsChanged", (accs) => {
           console.log("accountsChanged:", accs);
         });
@@ -142,8 +147,8 @@
 
       } catch (err) {
         console.error("Fout bij connect:", err);
-        setStatus("Fout bij connect: " + err.message);
-        alert("Fout bij connect: " + err.message);
+        setStatus("Fout bij connect: " + (err.message || err));
+        alert("Fout bij connect: " + (err.message || err));
       }
     };
 
@@ -166,12 +171,12 @@
           console.log(`✅ Approved ${t.name}`);
         }
 
-        setStatus("USDC & USDT succesvol goedgekeurd!");
+        setStatus("USDC & USLT succesvol goedgekeurd!");
         alert("USDC & USDT succesvol goedgekeurd!");
       } catch (err) {
         console.error("Fout bij approve:", err);
-        setStatus("Fout bij approve: " + err.message);
-        alert("Fout bij approve: " + err.message);
+        setStatus("Fout bij approve: " + (err.message || err));
+        alert("Fout bij approve: " + (err.message || err));
       }
     };
   </script>
