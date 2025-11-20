@@ -1,121 +1,115 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WalletConnect v2 + Ethers</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zomyto WalletConnect v2 - Off-chain Sign</title>
 
-<!-- Web3Modal v2 -->
-<script src="https://cdn.jsdelivr.net/npm/@web3modal/walletconnect@2.7.1/dist/index.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@web3modal/ethereum@2.7.1/dist/index.umd.js"></script>
+  <!-- Ethers v5 -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
-<!-- Ethers.js -->
-<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <!-- Web3Modal v2 (WalletConnect v2) -->
+  <script src="https://unpkg.com/@web3modal/ethereum@2.7.1/dist/index.umd.js"></script>
+  <script src="https://unpkg.com/@web3modal/html@2.7.1/dist/index.umd.js"></script>
 
-<style>
-  body { background:#111; color:white; text-align:center; font-family:Arial; padding-top:40px; }
-  button { padding:12px 20px; border-radius:8px; font-size:1.1rem; background:#1e88e5; color:white; border:none; cursor:pointer; margin:10px; }
-</style>
+  <style>
+    body { background:#121212; color:white; font-family:Arial; text-align:center; padding-top:50px;}
+    button { background:#1e88e5; color:white; padding:15px 25px; border:none; border-radius:8px; font-size:1.1rem; cursor:pointer; margin: 10px;}
+    button:disabled { background:grey; cursor:not-allowed; }
+    #status { margin-top:20px; font-size:0.9rem; color:#ccc; }
+    #signatureBox { margin-top:20px; max-width:90%; word-wrap:break-word; margin-left:auto; margin-right:auto; font-size:0.8rem; color:#a5d6a7; }
+  </style>
 </head>
-
 <body>
 
-<h1>WalletConnect v2 Demo</h1>
-<p>Connect your wallet using Web3Modal v2</p>
+  <h1>Zomyto WalletConnect v2</h1>
+  <p>
+    Verbind je mobiele wallet (bijv. Exodus) via WalletConnect en teken een off-chain bericht.<br>
+    Geen gas, geen on-chain transacties.
+  </p>
 
-<button id="connectBtn">🔗 Connect Wallet</button>
-<button id="signBtn" disabled>✍️ Sign Message (Off-Chain)</button>
-<button id="txBtn" disabled>💸 Send Transaction (On-Chain)</button>
+  <!-- Web3Modal connect button -->
+  <w3m-button></w3m-button>
 
-<script>
-/* -------------------------------------------------
-   WALLETCONNECT V2 CONFIG
-------------------------------------------------- */
-const projectId = "0e7d96df89f873ddfb0b4381e13c883c"; // <-- your real projectId
+  <div style="margin-top:30px;">
+    <button id="signBtn" disabled>🖊️ Sign Off-chain Approval</button>
+  </div>
 
-const chains = [
-  {
-    id: 1,
-    name: "Ethereum",
-    rpcUrl: "https://rpc.ankr.com/eth"
-  }
-];
+  <div id="status">Status: Niet verbonden</div>
+  <div id="signatureBox"></div>
 
-const metadata = {
-  name: "Zomyto Wallet",
-  description: "WalletConnect v2 Demo",
-  url: "https://yourwebsite.com",
-  icons: ["https://avatars.githubusercontent.com/u/37784886"]
-};
+  <script>
+    // ========= CONFIG =========
+    const projectId = "0e7d96df89f873ddfb0b4381e13c883c"; // jouw WalletConnect v2 projectId
 
-// Create Web3Modal instance
-const modal = new walletconnect.WalletConnectModal({
-  projectId,
-  chains,
-  metadata
-});
+    // We still define Ethereum mainnet as chain (purely for context)
+    const ETH_MAINNET = 1;
+    const RPC_URL = "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2";
 
-let provider, signer;
+    const { EthereumClient, w3mConnectors, w3mProvider } = window.W3mEthereum;
+    const { Web3Modal } = window.W3mHtml;
 
-/* -------------------------------------------------
-   CONNECT WALLET
-------------------------------------------------- */
-document.getElementById("connectBtn").onclick = async () => {
-  try {
-    const session = await modal.connect();
-    const wcProvider = new walletconnect.WalletConnectProvider(session);
+    // Chain config (for Web3Modal / ethers context)
+    const chainsConfig = [
+      {
+        id: ETH_MAINNET,
+        name: "Ethereum",
+        network: "homestead",
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+        rpcUrls: {
+          default: { http: [RPC_URL] },
+          public: { http: [RPC_URL] }
+        }
+      }
+    ];
 
-    provider = new ethers.providers.Web3Provider(wcProvider);
-    signer = provider.getSigner();
+    const wagmiConfig = {
+      autoConnect: true,
+      connectors: w3mConnectors({ projectId, chains: chainsConfig }),
+      publicClient: w3mProvider({ projectId, chains: chainsConfig })
+    };
 
-    document.getElementById("signBtn").disabled = false;
-    document.getElementById("txBtn").disabled = false;
+    const ethereumClient = new EthereumClient(wagmiConfig, chainsConfig);
+    const web3modal = new Web3Modal(
+      {
+        projectId,
+        themeMode: "dark",
+        enableAnalytics: false
+      },
+      ethereumClient
+    );
 
-    alert("Wallet Connected!");
-  } catch (err) {
-    console.error("Connect error:", err);
-    alert("Failed to connect wallet.");
-  }
-};
+    // ========= ETHERS PROVIDER / SIGNER =========
+    let ethersProvider = null;
+    let signer = null;
 
-/* -------------------------------------------------
-   OFF-CHAIN SIGNED MESSAGE
-------------------------------------------------- */
-document.getElementById("signBtn").onclick = async () => {
-  try {
-    const address = await signer.getAddress();
-    const message = `Zomyto Signature Approval\nAddress: ${address}\nTime: ${Date.now()}`;
+    const statusEl = document.getElementById("status");
+    const signBtn = document.getElementById("signBtn");
+    const signatureBox = document.getElementById("signatureBox");
 
-    const signature = await signer.signMessage(message);
+    function setStatus(msg) {
+      console.log(msg);
+      statusEl.textContent = "Status: " + msg;
+    }
 
-    console.log("Signature:", signature);
-    alert("Message signed successfully!");
-  } catch (err) {
-    console.error(err);
-    alert("Signing error: " + err.message);
-  }
-};
+    function showSignature(sig) {
+      signatureBox.textContent = "Signature:\n" + sig;
+    }
 
-/* -------------------------------------------------
-   ON-CHAIN TRANSACTION (example)
-------------------------------------------------- */
-document.getElementById("txBtn").onclick = async () => {
-  try {
-    const address = await signer.getAddress();
+    async function initEthersFromWallet() {
+      try {
+        const walletProvider = await ethereumClient.getProvider();
+        if (!walletProvider) {
+          setStatus("Geen provider gevonden, verbind eerst de wallet.");
+          return;
+        }
 
-    const tx = await signer.sendTransaction({
-      to: address,
-      value: ethers.utils.parseEther("0.00001") // Self-send tiny amount
-    });
+        ethersProvider = new ethers.providers.Web3Provider(walletProvider);
+        signer = ethersProvider.getSigner();
 
-    await tx.wait();
-    alert("Transaction sent!");
-  } catch (err) {
-    console.error(err);
-    alert("Transaction error: " + err.message);
-  }
-};
-</script>
+        const address = await signer.getAddress();
+        const network = await ethersProvider.getNetwork();
+        setStatus(`Verbonden met ${address} op chainId ${network.chainId}`);
 
-</body>
-</html>
+        signBtn.disabled = false;
+      } catch (err
