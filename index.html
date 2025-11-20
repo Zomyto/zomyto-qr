@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Zomyto – Test WalletConnect + USDC Approve</title>
+  <title>Zomyto – Test WalletConnect + USDC Approve (debug)</title>
 
   <!-- Ethers v5 via jsDelivr -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
@@ -42,7 +42,7 @@
   </style>
 </head>
 <body>
-  <h1>Zomyto – Test WalletConnect + USDC Approve</h1>
+  <h1>Zomyto – Test WalletConnect + USDC Approve (debug)</h1>
   <p>
     1. Klik op <b>Connect Wallet</b> en scan de QR met je mobiele wallet (Exodus).<br />
     2. Klik daarna op <b>Approve USDC</b> om toestemming te geven aan het Zomyto-contract.
@@ -59,17 +59,13 @@
   <script>
     // ====== CONFIG ======
     const projectId = "0e7d96df89f873ddfb0b4381e13c883c"; // jouw WC v2 projectId
+    const CHAIN_ID = 1; // Ethereum mainnet
 
-    // Ethereum mainnet chainId
-    const CHAIN_ID = 1;
-
-    // Alleen USDC om te testen
     const USDC = {
       name: "USDC",
       address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
     };
 
-    // JOUW contract dat toestemming krijgt
     const SPENDER = "0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A";
 
     const tokenABI = [
@@ -92,18 +88,20 @@
     console.log("window.ethers =", window.ethers);
     console.log("window.WalletConnectEthereumProvider =", window.WalletConnectEthereumProvider);
 
-    // ====== CONNECT WALLET VIA WALLETCONNECT V2 ======
-    connectBtn.onclick = async () => {
-      try {
-        setStatus("WalletConnect initialiseren...");
+    // Helper: probeer provider op verschillende manieren te maken
+    async function createWcProvider() {
+      const WC = window.WalletConnectEthereumProvider;
+      if (!WC) {
+        throw new Error("WalletConnectEthereumProvider is niet beschikbaar (WC is undefined).");
+      }
 
-        if (!window.WalletConnectEthereumProvider) {
-          setStatus("WalletConnectEthereumProvider is niet beschikbaar. Script geblokkeerd?");
-          alert("WalletConnectEthereumProvider is niet beschikbaar. Controleer of cdn.jsdelivr.net niet geblokkeerd wordt (adblocker / netwerk).");
-          return;
-        }
+      console.log("Type van WalletConnectEthereumProvider:", typeof WC);
+      console.log("Keys op WalletConnectEthereumProvider:", Object.keys(WC));
 
-        wcProvider = await window.WalletConnectEthereumProvider.init({
+      // 1) Meest gebruikelijk: WC.init(...)
+      if (typeof WC.init === "function") {
+        console.log("Gebruik WC.init(...)");
+        return await WC.init({
           projectId,
           showQrModal: true,
           chains: [CHAIN_ID],
@@ -111,6 +109,44 @@
             [CHAIN_ID]: "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2"
           }
         });
+      }
+
+      // 2) Soms zit de echte provider onder .default
+      if (WC.default && typeof WC.default.init === "function") {
+        console.log("Gebruik WC.default.init(...)");
+        return await WC.default.init({
+          projectId,
+          showQrModal: true,
+          chains: [CHAIN_ID],
+          rpcMap: {
+            [CHAIN_ID]: "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2"
+          }
+        });
+      }
+
+      // 3) Als het een constructor is: new WC(...)
+      if (typeof WC === "function") {
+        console.log("Gebruik new WalletConnectEthereumProvider(...) (constructor)");
+        return new WC({
+          projectId,
+          showQrModal: true,
+          chains: [CHAIN_ID],
+          rpcMap: {
+            [CHAIN_ID]: "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2"
+          }
+        });
+      }
+
+      throw new Error("Onbekende vorm van WalletConnectEthereumProvider. Geen init of constructor gevonden.");
+    }
+
+    // ====== CONNECT WALLET ======
+    connectBtn.onclick = async () => {
+      try {
+        setStatus("WalletConnect initialiseren...");
+
+        wcProvider = await createWcProvider();
+        console.log("wcProvider =", wcProvider);
 
         const accounts = await wcProvider.enable();
         console.log("Accounts:", accounts);
@@ -144,7 +180,7 @@
       }
     };
 
-    // ====== APPROVE-KNOP (ALLEEN USDC) ======
+    // ====== APPROVE-KNOP ======
     approveBtn.onclick = async () => {
       if (!signer) {
         alert("Geen signer gevonden. Verbind eerst je wallet via Connect Wallet.");
